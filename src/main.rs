@@ -1,9 +1,8 @@
-use std::time::SystemTime;
-
 use x11rb::connection::Connection;
 use x11rb::protocol::xinput::list_input_devices;
 use x11rb::protocol::xinput::xi_query_version;
 use x11rb::protocol::xinput::xi_select_events;
+use x11rb::protocol::xinput::DeviceUse;
 use x11rb::protocol::xinput::EventMask;
 use x11rb::protocol::xinput::XIEventMask;
 use x11rb::protocol::xproto::*;
@@ -73,13 +72,18 @@ fn main() {
         Err(error) => panic!("Could not get input devices: {:?}", error),
     };
 
-    // Create an event mask for every input device.
+    // Create an event mask for master pointer devices.
     let mut event_masks: Vec<EventMask> = Vec::new();
     for device in input_devices {
-        event_masks.push(EventMask {
-            deviceid: device.device_id.into(),
-            mask: vec![XIEventMask::RAW_MOTION.into()],
-        });
+        match device.device_use {
+            DeviceUse::IS_X_POINTER => {
+                event_masks.push(EventMask {
+                    deviceid: device.device_id.into(),
+                    mask: vec![XIEventMask::RAW_MOTION.into()],
+                });
+            }
+            _ => continue,
+        };
     }
 
     // Apply event masks.
@@ -109,21 +113,40 @@ fn main() {
         };
 
         // Handle motion events.
+        //
+        // A RawDevice event provides the information provided by the driver to the
+        // client. RawEvent provides both the raw data as supplied by the driver and
+        // transformed data as used in the server. Transformations include, but are
+        // not limited to, axis clipping and acceleration.
+        // Transformed valuator data may be equivalent to raw data. In this case,
+        // both raw and transformed valuator data is provided.
+        //
+        // axisvalues
+        // Valuator data in device-native resolution. This is a non-sparse
+        // array, value N represents the axis corresponding to the Nth bit set
+        // in valuators.
+        //
+        // axisvalues_raw
+        // Untransformed valuator data in device-native resolution. This is a
+        // non-sparse array, value N represents the axis corresponding to the
+        // Nth bit set in valuators.
+        //
+        // FP3232
+        // Fixed point decimal in 32.32 format as one INT32 and one CARD32.
+        // The INT32 contains the integral part, the CARD32 the decimal fraction
+        // shifted by 32.
         match event {
-            Event::XinputRawMotion(_event) => {
+            Event::XinputRawMotion(event) => {
+                // Get the transformed pointer coordinates too for comparison
                 let pointer = get_pointer(&conn, screen.root);
-                let timestamp = match SystemTime::now().duration_since(SystemTime::UNIX_EPOCH) {
-                    Ok(t) => t.as_millis(),
-                    Err(_err) => 0,
-                };
                 println!(
-                    "root_x: {} root_y: {} win_x: {} win_y: {}, sequence: {}, t: {}",
+                    "root_x: {} root_y: {}, raw_x: {:?}, raw_y: {:?}, sequence: {}, t: {}",
                     pointer.root_x,
                     pointer.root_y,
-                    pointer.win_x,
-                    pointer.win_y,
-                    pointer.sequence,
-                    timestamp
+                    event.axisvalues_raw[0],
+                    event.axisvalues_raw[1],
+                    event.sequence,
+                    event.time,
                 );
             }
             _ => continue,
