@@ -21,3 +21,9 @@ Use the following command to run the project:
 ```
 cargo run
 ```
+
+## License
+
+The project is licensed under the
+[MIT license](http://opensource.org/licenses/MIT) with an addition regarding the
+origin of the project. For addition information see the [LICENSE](LICENSE) file.
