@@ -87,6 +87,31 @@ fn get_input_device_metadata() -> String {
     }
 }
 
+/// Query information about the operating system.
+/// The function uses the `lsb_release` command.
+fn get_os_metadata() -> String {
+    let process = match Command::new("lsb_release")
+        .arg("--all")
+        .stdout(Stdio::piped())
+        .spawn()
+    {
+        Ok(process) => process,
+        Err(error) => {
+            println!("Could not spawn lsb_release: {}", error);
+            return String::new();
+        }
+    };
+
+    let mut s = String::new();
+    match process.stdout.unwrap().read_to_string(&mut s) {
+        Ok(_) => return s,
+        Err(error) => {
+            println!("couldn't read lsb_release stdout: {}", error);
+            return String::new();
+        }
+    }
+}
+
 /// Get the pointer from the X server.
 fn get_pointer(
     connection: &x11rb::rust_connection::RustConnection,
@@ -136,6 +161,13 @@ fn main() {
     println!(
         "Input devices with mouse capabilities: \n{}",
         &input_device_metadata
+    );
+
+    // Print operating system metadata.
+    let os_metadata = get_os_metadata();
+    println!(
+        "Operating system information: \n{}",
+        &os_metadata
     );
 
     // Get input devices.
