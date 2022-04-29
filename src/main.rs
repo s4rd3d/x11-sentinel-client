@@ -1,3 +1,7 @@
+use std::io::prelude::*;
+use std::process::Command;
+use std::process::Stdio;
+
 use x11rb::connection::Connection;
 use x11rb::protocol::xinput::list_input_devices;
 use x11rb::protocol::xinput::xi_query_version;
@@ -20,6 +24,67 @@ fn print_screen_metadata(screen: &x11rb::protocol::xproto::Screen) -> () {
         "Screen height in milimeters: {}",
         screen.height_in_millimeters
     );
+}
+
+/// Query information about input devices with mouse capabilities.
+/// The function reads the `/proc/bus/input/devices` file and uses the `grep`
+/// command to filter four mouse devices.
+///
+/// The result of the function can be interpreted as follows:
+///
+/// The B in front stands for bitmap, N, P, S, U, H are simply first letter in
+/// corresponding name value and I is for ID. In ordered fashion:
+///
+/// I => @id: id of the device
+/// Bus     => id.bustype
+/// Vendor  => id.vendor
+/// Product => id.product
+/// Version => id.version
+/// N => name of the device.
+/// P => physical path to the device in the system hierarchy.
+/// S => sysfs path.
+/// U => unique identification code for the device (if device has it).
+/// H => list of input handles associated with the device.
+/// B => bitmaps
+/// PROP => device properties and quirks.
+/// EV   => types of events supported by the device.
+/// KEY  => keys/buttons this device has.
+/// MSC  => miscellaneous events supported by the device.
+/// LED  => leds present on the device.
+fn get_input_device_metadata() -> String {
+    let process1 = match Command::new("cat")
+        .arg("/proc/bus/input/devices")
+        .stdout(Stdio::piped())
+        .spawn()
+    {
+        Ok(process) => process,
+        Err(error) => {
+            println!("Could not spawn cat: {}", error);
+            return String::new();
+        }
+    };
+
+    let process2 = match Command::new("grep")
+        .args(["-B", "5", "-A", "5", "mouse"])
+        .stdin(process1.stdout.unwrap())
+        .stdout(Stdio::piped())
+        .spawn()
+    {
+        Ok(process) => process,
+        Err(error) => {
+            println!("Could not spawn grep: {}", error);
+            return String::new();
+        }
+    };
+
+    let mut s = String::new();
+    match process2.stdout.unwrap().read_to_string(&mut s) {
+        Ok(_) => return s,
+        Err(error) => {
+            println!("couldn't read grep stdout: {}", error);
+            return String::new();
+        }
+    }
 }
 
 /// Get the pointer from the X server.
@@ -65,6 +130,13 @@ fn main() {
     // Select screen and print its metadata.
     let screen = &setup.roots[screen_number];
     print_screen_metadata(screen);
+
+    // Print input device metadata.
+    let input_device_metadata = get_input_device_metadata();
+    println!(
+        "Input devices with mouse capabilities: \n{}",
+        &input_device_metadata
+    );
 
     // Get input devices.
     let input_devices = match list_input_devices(&conn) {
