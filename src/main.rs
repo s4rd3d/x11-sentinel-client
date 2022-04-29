@@ -3,27 +3,41 @@ use std::process::Command;
 use std::process::Stdio;
 
 use x11rb::connection::Connection;
+
 use x11rb::protocol::xinput::list_input_devices;
 use x11rb::protocol::xinput::xi_query_version;
 use x11rb::protocol::xinput::xi_select_events;
 use x11rb::protocol::xinput::DeviceUse;
 use x11rb::protocol::xinput::EventMask;
 use x11rb::protocol::xinput::XIEventMask;
+
 use x11rb::protocol::xproto::*;
+
 use x11rb::protocol::Event;
 
-/// Print various metadata of the input screen.
-fn print_screen_metadata(screen: &x11rb::protocol::xproto::Screen) -> () {
-    println!("Screen width in pixels: {}", screen.width_in_pixels);
-    println!("Screen height in pixels: {}", screen.height_in_pixels);
-    println!(
-        "Screen width in milimeters: {}",
-        screen.width_in_millimeters
-    );
-    println!(
-        "Screen height in milimeters: {}",
-        screen.height_in_millimeters
-    );
+use x11rb::protocol::randr::get_monitors;
+use x11rb::protocol::randr::MonitorInfo;
+
+/// Query information about the monitors which are being used.
+/// The `MonitorInfo` struct contains various information about the monitors
+/// including the pixel dimensions, physical dimensions, layout and more.
+fn get_monitor_metadata(
+    conn: &x11rb::rust_connection::RustConnection,
+    screen: &x11rb::protocol::xproto::Screen,
+) -> Vec<MonitorInfo> {
+    match get_monitors(conn, screen.root, true) {
+        Ok(cookie) => match cookie.reply() {
+            Ok(reply) => return reply.monitors,
+            Err(error) => {
+                println!("Could not reply from the server: {}", error);
+                return vec![];
+            }
+        },
+        Err(error) => {
+            println!("Could not get monitor info: {}", error);
+            return vec![];
+        }
+    }
 }
 
 /// Query information about input devices with mouse capabilities.
@@ -152,9 +166,12 @@ fn main() {
         Err(error) => panic!("Could not query XInput version: {:?}", error),
     };
 
-    // Select screen and print its metadata.
+    // Select screen
     let screen = &setup.roots[screen_number];
-    print_screen_metadata(screen);
+
+    // Print monitor metadata
+    let monitor_metadata = get_monitor_metadata(&conn, screen);
+    println!("Monitor information: {:#?}", &monitor_metadata);
 
     // Print input device metadata.
     let input_device_metadata = get_input_device_metadata();
