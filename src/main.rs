@@ -1,7 +1,3 @@
-use std::io::prelude::*;
-use std::process::Command;
-use std::process::Stdio;
-
 use x11rb::connection::Connection;
 
 use x11rb::protocol::xinput::list_input_devices;
@@ -15,116 +11,7 @@ use x11rb::protocol::xproto::*;
 
 use x11rb::protocol::Event;
 
-use x11rb::protocol::randr::get_monitors;
-use x11rb::protocol::randr::MonitorInfo;
-
-/// Query information about the monitors which are being used.
-/// The `MonitorInfo` struct contains various information about the monitors
-/// including the pixel dimensions, physical dimensions, layout and more.
-fn get_monitor_metadata(
-    conn: &x11rb::rust_connection::RustConnection,
-    screen: &x11rb::protocol::xproto::Screen,
-) -> Vec<MonitorInfo> {
-    match get_monitors(conn, screen.root, true) {
-        Ok(cookie) => match cookie.reply() {
-            Ok(reply) => return reply.monitors,
-            Err(error) => {
-                println!("Could not reply from the server: {}", error);
-                return vec![];
-            }
-        },
-        Err(error) => {
-            println!("Could not get monitor info: {}", error);
-            return vec![];
-        }
-    }
-}
-
-/// Query information about input devices with mouse capabilities.
-/// The function reads the `/proc/bus/input/devices` file and uses the `grep`
-/// command to filter four mouse devices.
-///
-/// The result of the function can be interpreted as follows:
-///
-/// The B in front stands for bitmap, N, P, S, U, H are simply first letter in
-/// corresponding name value and I is for ID. In ordered fashion:
-///
-/// I => @id: id of the device
-/// Bus     => id.bustype
-/// Vendor  => id.vendor
-/// Product => id.product
-/// Version => id.version
-/// N => name of the device.
-/// P => physical path to the device in the system hierarchy.
-/// S => sysfs path.
-/// U => unique identification code for the device (if device has it).
-/// H => list of input handles associated with the device.
-/// B => bitmaps
-/// PROP => device properties and quirks.
-/// EV   => types of events supported by the device.
-/// KEY  => keys/buttons this device has.
-/// MSC  => miscellaneous events supported by the device.
-/// LED  => leds present on the device.
-fn get_input_device_metadata() -> String {
-    let process1 = match Command::new("cat")
-        .arg("/proc/bus/input/devices")
-        .stdout(Stdio::piped())
-        .spawn()
-    {
-        Ok(process) => process,
-        Err(error) => {
-            println!("Could not spawn cat: {}", error);
-            return String::new();
-        }
-    };
-
-    let process2 = match Command::new("grep")
-        .args(["-B", "5", "-A", "5", "mouse"])
-        .stdin(process1.stdout.unwrap())
-        .stdout(Stdio::piped())
-        .spawn()
-    {
-        Ok(process) => process,
-        Err(error) => {
-            println!("Could not spawn grep: {}", error);
-            return String::new();
-        }
-    };
-
-    let mut s = String::new();
-    match process2.stdout.unwrap().read_to_string(&mut s) {
-        Ok(_) => return s,
-        Err(error) => {
-            println!("couldn't read grep stdout: {}", error);
-            return String::new();
-        }
-    }
-}
-
-/// Query information about the operating system.
-/// The function uses the `lsb_release` command.
-fn get_os_metadata() -> String {
-    let process = match Command::new("lsb_release")
-        .arg("--all")
-        .stdout(Stdio::piped())
-        .spawn()
-    {
-        Ok(process) => process,
-        Err(error) => {
-            println!("Could not spawn lsb_release: {}", error);
-            return String::new();
-        }
-    };
-
-    let mut s = String::new();
-    match process.stdout.unwrap().read_to_string(&mut s) {
-        Ok(_) => return s,
-        Err(error) => {
-            println!("couldn't read lsb_release stdout: {}", error);
-            return String::new();
-        }
-    }
-}
+mod metadata;
 
 /// Get the pointer from the X server.
 fn get_pointer(
@@ -170,22 +57,21 @@ fn main() {
     let screen = &setup.roots[screen_number];
 
     // Print monitor metadata
-    let monitor_metadata = get_monitor_metadata(&conn, screen);
-    println!("Monitor information: {:#?}", &monitor_metadata);
+    let monitor_metadata = metadata::get_monitor_metadata(&conn, screen);
+    for metadata in monitor_metadata {
+        println!("Monitor information: \n{}", &metadata);
+    }
 
     // Print input device metadata.
-    let input_device_metadata = get_input_device_metadata();
+    let input_device_metadata = metadata::get_input_device_metadata();
     println!(
         "Input devices with mouse capabilities: \n{}",
         &input_device_metadata
     );
 
     // Print operating system metadata.
-    let os_metadata = get_os_metadata();
-    println!(
-        "Operating system information: \n{}",
-        &os_metadata
-    );
+    let os_metadata = metadata::get_os_metadata();
+    println!("Operating system information: {}", &os_metadata);
 
     // Get input devices.
     let input_devices = match list_input_devices(&conn) {
