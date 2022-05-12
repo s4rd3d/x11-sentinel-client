@@ -1,3 +1,7 @@
+/**
+ * Module for grouping platform and device specific metadata collection
+ * functions.
+ */
 use std::io::prelude::*;
 use std::process::Command;
 use std::process::Stdio;
@@ -58,8 +62,8 @@ fn mm_to_inch(x: f64) -> f64 {
 }
 
 /// Query information about the operating system.
-pub fn get_os_metadata() -> os_info::Info{
-  os_info::get()
+pub fn get_os_metadata() -> os_info::Info {
+    os_info::get()
 }
 /// Query information about the monitors which are being used.
 /// The `MonitorInfo` struct contains various information about the monitors
