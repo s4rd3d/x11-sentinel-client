@@ -15,6 +15,8 @@ use x11rb::protocol::xproto::*;
 use std::sync::mpsc;
 use x11rb::protocol::Event;
 
+use crate::status::Status;
+
 mod metadata;
 
 fn check_xinput(connection: &x11rb::rust_connection::RustConnection) -> () {
@@ -113,10 +115,9 @@ fn select_events(
         },
         Err(error) => panic!("Could not connect to server: {:?}", error),
     };
-
 }
 
-pub fn run(rx: mpsc::Receiver<&str>) -> () {
+pub fn run(rx: mpsc::Receiver<Status>) -> () {
     // Setup connection to the X server
     let (connection, screen_number) = setup();
 
@@ -146,17 +147,17 @@ pub fn run(rx: mpsc::Receiver<&str>) -> () {
     loop {
         // Process incoming status updates (if any).
         match rx.try_recv() {
-            Ok(msg) => println!("Status: {}", msg),
+            Ok(msg) => println!(
+                "phase: {} description: {}, value: {}",
+                msg.phase, msg.description, msg.value
+            ),
             Err(_) => (),
         }
 
         // Poll for a new event, the program should not panic on connection
         // error.
-        let event = match connection.poll_for_event() {
-            Ok(result) => match result {
-                Some(event) => event,
-                None => continue,
-            },
+        let event = match connection.wait_for_event() {
+            Ok(event) => event,
             Err(error) => {
                 println!("Connection error: {:?}", error);
                 continue;
@@ -195,6 +196,9 @@ pub fn run(rx: mpsc::Receiver<&str>) -> () {
                     pointer.root_x,
                     pointer.root_y,
                     event.axisvalues_raw[0],
+                    // TODO: Scrolling on a touchpad with two fingers causes the
+                    // main thread to panic with index out of bounds on the
+                    // following line.
                     event.axisvalues_raw[1],
                     event.sequence,
                     event.time,

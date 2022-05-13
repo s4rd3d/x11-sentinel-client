@@ -1,11 +1,14 @@
 use std::sync::mpsc;
 use std::thread;
+use dotenv::dotenv;
 
 mod status;
 mod data_collector;
 
 
 fn main() {
+    dotenv().ok();
+
     let (tx, rx) = mpsc::channel();
 
     // Start the status polling service
