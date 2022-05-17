@@ -1,141 +1,262 @@
 /**
  * This module implements the main data collection logic.
  */
-use x11rb::connection::Connection;
-
-use x11rb::protocol::xinput::list_input_devices;
-use x11rb::protocol::xinput::xi_query_version;
-use x11rb::protocol::xinput::xi_select_events;
-use x11rb::protocol::xinput::DeviceUse;
-use x11rb::protocol::xinput::EventMask;
-use x11rb::protocol::xinput::XIEventMask;
-
-use x11rb::protocol::xproto::*;
-
 use std::sync::mpsc;
+use std::time::{SystemTime, UNIX_EPOCH};
+
+use serde::Serialize;
+use serde_json::json;
+
+use x11rb::connection::Connection;
 use x11rb::protocol::Event;
+
+use uuid::Uuid;
 
 use crate::status::Status;
 
 mod metadata;
+mod utils;
 
-fn check_xinput(connection: &x11rb::rust_connection::RustConnection) -> () {
-    // Check if xinput extension version 2.0 is enabled.
-    match xi_query_version(connection, 2, 0) {
-        Ok(result) => match result.reply() {
-            Ok(version) => println!(
-                "XInput version: {}.{}",
-                version.major_version, version.minor_version
-            ),
-            Err(error) => panic!("Could not get reply from server: {:?}", error),
-        },
-        Err(error) => panic!("Could not query XInput version: {:?}", error),
-    };
+//==============================================================================
+// Structs
+//==============================================================================
+
+struct State {
+    buffer: Vec<EventType>,
+    buffer_size_limit: usize,
+    epoch: u64,
+    session_id: String,
+    stream_id: String,
+    sequence_number: u64,
 }
 
-/// Get the pointer from the X server.
-fn get_pointer(
-    connection: &x11rb::rust_connection::RustConnection,
-    window: u32,
-) -> x11rb::protocol::xproto::QueryPointerReply {
-    return match query_pointer(connection, window) {
-        Ok(cookie) => match cookie.reply() {
-            Ok(result) => result,
-            Err(error) => panic!("Could not get reply from server: {:?}", error),
-        },
-        Err(error) => panic!("Cold not query pointer: {:?}", error),
-    };
-}
+impl State {
+    /// Constructor for the State object.
+    fn new() -> State {
+        // Initialize empty buffer
+        let buffer = vec![];
 
-/// Setup connection to the X server and check extension availability.
-fn setup() -> (x11rb::rust_connection::RustConnection, usize) {
-    // Create connection with the X server.
-    let (connection, screen_number) = match x11rb::connect(None) {
-        Ok(result) => result,
-        Err(error) => panic!("Could not establish connection: {:?}", error),
-    };
+        // Get buffer size limit from the environment.
+        let buffer_size_limit: usize = utils::get_env_var("BUFFER_SIZE_LIMIT");
 
-    // Check if the xinput extension is enabled
-    check_xinput(&connection);
+        // Milliseconds since 00:00:00 UTC 1 January 1970
+        let epoch: u64 = SystemTime::now()
+            .duration_since(UNIX_EPOCH)
+            .unwrap()
+            .as_millis()
+            .try_into()
+            .unwrap();
 
-    (connection, screen_number)
-}
+        // Unique identifier of the current user session.
+        let session_id = utils::get_session_id();
 
-fn query_metadata(
-    connection: &x11rb::rust_connection::RustConnection,
-    screen: &x11rb::protocol::xproto::Screen,
-) -> () {
-    // Print monitor metadata
-    let monitor_metadata = metadata::get_monitor_metadata(&connection, &screen);
-    for metadata in monitor_metadata {
-        println!("Monitor information: \n{}", &metadata);
+        // Generate unique stream identifier.
+        let stream_id = Uuid::new_v4().to_string();
+
+        // Sequence number for chunk submissions starting at 0.
+        let sequence_number = 0;
+
+        State {
+            buffer,
+            buffer_size_limit,
+            epoch,
+            session_id,
+            stream_id,
+            sequence_number
+        }
     }
 
-    // Print input device metadata.
-    let input_device_metadata = metadata::get_input_device_metadata();
-    println!(
-        "Input devices with mouse capabilities: \n{}",
-        &input_device_metadata
-    );
-
-    // Print operating system metadata.
-    let os_metadata = metadata::get_os_metadata();
-    println!("Operating system information: {}", &os_metadata);
-}
-
-fn select_events(
-    connection: &x11rb::rust_connection::RustConnection,
-    screen: &x11rb::protocol::xproto::Screen,
-) -> () {
-    // Get input devices.
-    let input_devices = match list_input_devices(connection) {
-        Ok(result) => result.reply().unwrap().devices,
-        Err(error) => panic!("Could not get input devices: {:?}", error),
-    };
-
-    // Create an event mask for master pointer devices.
-    let mut event_masks: Vec<EventMask> = Vec::new();
-    for device in input_devices {
-        match device.device_use {
-            DeviceUse::IS_X_POINTER => {
-                event_masks.push(EventMask {
-                    deviceid: device.device_id.into(),
-                    mask: vec![XIEventMask::RAW_MOTION.into()],
-                });
-            }
-            _ => continue,
-        };
+    /// Event handler for `MotionEvent`.
+    fn handle_raw_motion_event(
+        &mut self,
+        event: x11rb::protocol::xinput::RawMotionEvent,
+        pointer: x11rb::protocol::xproto::QueryPointerReply,
+    ) -> () {
+        self.push(EventType::MotionEvent(
+            0,
+            event.axisvalues_raw[0].integral,
+            event.axisvalues_raw[0].frac,
+            event.axisvalues_raw[1].integral,
+            event.axisvalues_raw[1].frac,
+            pointer.root_x,
+            pointer.root_y,
+            event.time,
+        ));
     }
 
-    // Apply event masks.
-    match xi_select_events(connection, screen.root, &event_masks) {
-        Ok(cookie) => match cookie.check() {
-            Ok(result) => drop(result),
-            Err(error) => panic!("Could not apply event masks: {:?}", error),
-        },
-        Err(error) => panic!("Could not connect to server: {:?}", error),
-    };
+    /// Event handler for `ScrollEvent`.
+    fn handle_scroll_event(
+        &mut self,
+        event: x11rb::protocol::xinput::RawMotionEvent,
+        pointer: x11rb::protocol::xproto::QueryPointerReply,
+    ) -> () {
+        self.push(EventType::ScrollEvent(
+            1,
+            event.axisvalues_raw[0].integral,
+            event.axisvalues_raw[0].frac,
+            pointer.root_x,
+            pointer.root_y,
+            event.time,
+        ));
+    }
+
+    /// Event handler for `TouchBeginEvent`.
+    fn handle_touch_begin_event(
+        &mut self,
+        event: x11rb::protocol::xinput::RawTouchBeginEvent,
+        pointer: x11rb::protocol::xproto::QueryPointerReply,
+    ) -> () {
+        self.push(EventType::TouchBeginEvent(
+            2,
+            event.axisvalues_raw[0].integral,
+            event.axisvalues_raw[0].frac,
+            event.axisvalues_raw[1].integral,
+            event.axisvalues_raw[1].frac,
+            pointer.root_x,
+            pointer.root_y,
+            event.time,
+        ));
+    }
+
+    /// Event handler for `TouchUpdateEvent`.
+    fn handle_touch_update_event(
+        &mut self,
+        event: x11rb::protocol::xinput::RawTouchUpdateEvent,
+        pointer: x11rb::protocol::xproto::QueryPointerReply,
+    ) -> () {
+        self.push(EventType::TouchUpdateEvent(
+            3,
+            event.axisvalues_raw[0].integral,
+            event.axisvalues_raw[0].frac,
+            event.axisvalues_raw[1].integral,
+            event.axisvalues_raw[1].frac,
+            pointer.root_x,
+            pointer.root_y,
+            event.time,
+        ));
+    }
+
+    /// Event handler for `TouchUpdateEvent`.
+    fn handle_touch_end_event(
+        &mut self,
+        event: x11rb::protocol::xinput::RawTouchEndEvent,
+        pointer: x11rb::protocol::xproto::QueryPointerReply,
+    ) -> () {
+        self.push(EventType::TouchEndEvent(
+            4,
+            event.axisvalues_raw[0].integral,
+            event.axisvalues_raw[0].frac,
+            event.axisvalues_raw[1].integral,
+            event.axisvalues_raw[1].frac,
+            pointer.root_x,
+            pointer.root_y,
+            event.time,
+        ));
+    }
+
+    /// Event handler for `ButtonPressEvent`.
+    fn handle_button_press_event(
+        &mut self,
+        event: x11rb::protocol::xinput::RawButtonPressEvent,
+        pointer: x11rb::protocol::xproto::QueryPointerReply,
+    ) -> () {
+        self.push(EventType::ButtonPressEvent(
+            5,
+            pointer.root_x,
+            pointer.root_y,
+            event.detail,
+            event.time,
+        ));
+    }
+
+    /// Event handler for `ButtonReleaseEvent`.
+    fn handle_button_release_event(
+        &mut self,
+        event: x11rb::protocol::xinput::RawButtonReleaseEvent,
+        pointer: x11rb::protocol::xproto::QueryPointerReply,
+    ) -> () {
+        self.push(EventType::ButtonReleaseEvent(
+            6,
+            pointer.root_x,
+            pointer.root_y,
+            event.detail,
+            event.time,
+        ));
+    }
+
+    fn push(&mut self, event: EventType) -> () {
+        self.buffer.push(event);
+        if self.buffer.len() > self.buffer_size_limit {
+            self.submit();
+        }
+    }
+
+    /// Return a deep copy of the buffer then clear its contents.
+    fn flush_buffer(&mut self) -> Vec<EventType> {
+        let send_buffer = self.buffer.clone();
+        self.buffer.clear();
+        return send_buffer;
+    }
+
+    fn submit(&mut self) -> () {
+        // Retrieve data
+        let send_buffer = self.flush_buffer();
+
+        // Do not send empty buffer
+        if send_buffer.len() == 0 {
+            return;
+        }
+
+        let body = json!({
+            "metadata": {
+                "epoch": self.epoch,
+                "session_id": self.session_id,
+                "stream_id": self.stream_id,
+                "sequence_number": self.sequence_number
+            },
+            "chunk": send_buffer,
+        });
+        println!("Buffer: {:?}", body.to_string());
+    }
 }
+
+//==============================================================================
+// Enums
+//==============================================================================
+
+#[derive(Copy, Clone, Debug, Serialize)]
+#[serde(untagged)]
+enum EventType {
+    MotionEvent(u8, i32, u32, i32, u32, i16, i16, u32),
+    ScrollEvent(u8, i32, u32, i16, i16, u32),
+    TouchBeginEvent(u8, i32, u32, i32, u32, i16, i16, u32),
+    TouchUpdateEvent(u8, i32, u32, i32, u32, i16, i16, u32),
+    TouchEndEvent(u8, i32, u32, i32, u32, i16, i16, u32),
+    ButtonPressEvent(u8, i16, i16, u32, u32),
+    ButtonReleaseEvent(u8, i16, i16, u32, u32),
+}
+
+//==============================================================================
+// Public functions
+//==============================================================================
 
 pub fn run(rx: mpsc::Receiver<Status>) -> () {
-    // Setup connection to the X server
-    let (connection, screen_number) = setup();
+    // Setup connection to the X server.
+    let (connection, screen_number) = utils::setup_connection();
 
-    // Setup connection and print protocol version.
+    let mut state = State::new();
+
+    // Setup connection.
     let setup = &connection.setup();
-    println!(
-        "X Protocol version: {}.{}",
-        setup.protocol_major_version, setup.protocol_minor_version
-    );
 
-    // Select screen
+    // Select screen.
     let screen = &setup.roots[screen_number];
 
     // Collect platform and device specific metadata.
-    query_metadata(&connection, screen);
+    metadata::query_metadata(&connection, screen);
 
     // Apply specific event masks to the connection.
-    select_events(&connection, screen);
+    utils::select_events(&connection, screen);
 
     // Send pending requests to the X server.
     match connection.flush() {
@@ -164,45 +285,30 @@ pub fn run(rx: mpsc::Receiver<Status>) -> () {
             }
         };
 
+        // Get the transformed pointer coordinates too for comparison.
+        let pointer = utils::get_pointer(&connection, screen.root);
+
         // Handle motion events.
-        //
-        // A RawDevice event provides the information provided by the driver to the
-        // client. RawEvent provides both the raw data as supplied by the driver and
-        // transformed data as used in the server. Transformations include, but are
-        // not limited to, axis clipping and acceleration.
-        // Transformed valuator data may be equivalent to raw data. In this case,
-        // both raw and transformed valuator data is provided.
-        //
-        // axisvalues
-        // Valuator data in device-native resolution. This is a non-sparse
-        // array, value N represents the axis corresponding to the Nth bit set
-        // in valuators.
-        //
-        // axisvalues_raw
-        // Untransformed valuator data in device-native resolution. This is a
-        // non-sparse array, value N represents the axis corresponding to the
-        // Nth bit set in valuators.
-        //
-        // FP3232
-        // Fixed point decimal in 32.32 format as one INT32 and one CARD32.
-        // The INT32 contains the integral part, the CARD32 the decimal fraction
-        // shifted by 32.
         match event {
-            Event::XinputRawMotion(event) => {
-                // Get the transformed pointer coordinates too for comparison
-                let pointer = get_pointer(&connection, screen.root);
-                println!(
-                    "root_x: {} root_y: {}, raw_x: {:?}, raw_y: {:?}, sequence: {}, t: {}",
-                    pointer.root_x,
-                    pointer.root_y,
-                    event.axisvalues_raw[0],
-                    // TODO: Scrolling on a touchpad with two fingers causes the
-                    // main thread to panic with index out of bounds on the
-                    // following line.
-                    event.axisvalues_raw[1],
-                    event.sequence,
-                    event.time,
-                );
+            Event::XinputRawMotion(event) => match event.axisvalues_raw.len() {
+                1 => state.handle_scroll_event(event, pointer),
+                2 => state.handle_raw_motion_event(event, pointer),
+                _ => (),
+            },
+            Event::XinputRawTouchBegin(event) => {
+                state.handle_touch_begin_event(event, pointer);
+            }
+            Event::XinputRawTouchUpdate(event) => {
+                state.handle_touch_update_event(event, pointer);
+            }
+            Event::XinputRawTouchEnd(event) => {
+                state.handle_touch_end_event(event, pointer);
+            }
+            Event::XinputRawButtonPress(event) => {
+                state.handle_button_press_event(event, pointer);
+            }
+            Event::XinputRawButtonRelease(event) => {
+                state.handle_button_release_event(event, pointer);
             }
             _ => continue,
         }

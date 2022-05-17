@@ -2,12 +2,17 @@
  * Module for grouping platform and device specific metadata collection
  * functions.
  */
+
 use std::io::prelude::*;
 use std::process::Command;
 use std::process::Stdio;
 use x11rb::protocol::randr::get_monitors;
 
 use std::fmt;
+
+//==============================================================================
+// Structs
+//==============================================================================
 
 pub struct MonitorMetadata {
     name: u32,
@@ -51,6 +56,36 @@ impl fmt::Display for MonitorMetadata {
     }
 }
 
+//==============================================================================
+// Public functions
+//==============================================================================
+
+pub fn query_metadata(
+    connection: &x11rb::rust_connection::RustConnection,
+    screen: &x11rb::protocol::xproto::Screen,
+) -> () {
+    // Print monitor metadata
+    let monitor_metadata = get_monitor_metadata(&connection, &screen);
+    for metadata in monitor_metadata {
+        println!("Monitor information: \n{}", &metadata);
+    }
+
+    // Print input device metadata.
+    let input_device_metadata = get_input_device_metadata();
+    println!(
+        "Input devices with mouse capabilities: \n{}",
+        &input_device_metadata
+    );
+
+    // Print operating system metadata.
+    let os_metadata = get_os_metadata();
+    println!("Operating system information: {}", &os_metadata);
+}
+
+//==============================================================================
+// Internal functions
+//==============================================================================
+
 /// Calculate the DPI (Dot Per Inch) value of the screen.
 fn calculate_dpi(length_in_pixel: f64, length_in_mm: f64) -> f64 {
     return length_in_pixel / mm_to_inch(length_in_mm);
@@ -62,13 +97,13 @@ fn mm_to_inch(x: f64) -> f64 {
 }
 
 /// Query information about the operating system.
-pub fn get_os_metadata() -> os_info::Info {
+fn get_os_metadata() -> os_info::Info {
     os_info::get()
 }
 /// Query information about the monitors which are being used.
 /// The `MonitorInfo` struct contains various information about the monitors
 /// including the pixel dimensions, physical dimensions, layout and more.
-pub fn get_monitor_metadata(
+fn get_monitor_metadata(
     conn: &x11rb::rust_connection::RustConnection,
     screen: &x11rb::protocol::xproto::Screen,
 ) -> Vec<MonitorMetadata> {
@@ -132,7 +167,7 @@ pub fn get_monitor_metadata(
 /// KEY  => keys/buttons this device has.
 /// MSC  => miscellaneous events supported by the device.
 /// LED  => leds present on the device.
-pub fn get_input_device_metadata() -> String {
+fn get_input_device_metadata() -> String {
     let process1 = match Command::new("cat")
         .arg("/proc/bus/input/devices")
         .stdout(Stdio::piped())
