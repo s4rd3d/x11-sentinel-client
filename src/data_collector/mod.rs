@@ -62,7 +62,7 @@ impl State {
             epoch,
             session_id,
             stream_id,
-            sequence_number
+            sequence_number,
         }
     }
 
@@ -184,6 +184,16 @@ impl State {
         ));
     }
 
+    /// Event handler for `MetadataChangedEvent`.
+    fn handle_metadata_changed_event(
+        &mut self,
+        connection: &x11rb::rust_connection::RustConnection,
+        screen: &x11rb::protocol::xproto::Screen,
+    ) -> () {
+        let metadata = metadata::query_metadata(connection, screen);
+        self.push(EventType::MetadataChangedEvent(7, metadata));
+    }
+
     fn push(&mut self, event: EventType) -> () {
         self.buffer.push(event);
         if self.buffer.len() > self.buffer_size_limit {
@@ -224,7 +234,7 @@ impl State {
 // Enums
 //==============================================================================
 
-#[derive(Copy, Clone, Debug, Serialize)]
+#[derive(Clone, Debug, Serialize)]
 #[serde(untagged)]
 enum EventType {
     MotionEvent(u8, i32, u32, i32, u32, i16, i16, u32),
@@ -234,6 +244,7 @@ enum EventType {
     TouchEndEvent(u8, i32, u32, i32, u32, i16, i16, u32),
     ButtonPressEvent(u8, i16, i16, u32, u32),
     ButtonReleaseEvent(u8, i16, i16, u32, u32),
+    MetadataChangedEvent(u8, metadata::Metadata),
 }
 
 //==============================================================================
@@ -253,7 +264,7 @@ pub fn run(rx: mpsc::Receiver<Status>) -> () {
     let screen = &setup.roots[screen_number];
 
     // Collect platform and device specific metadata.
-    metadata::query_metadata(&connection, screen);
+    state.handle_metadata_changed_event(&connection, screen);
 
     // Apply specific event masks to the connection.
     utils::select_events(&connection, screen);

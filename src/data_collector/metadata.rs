@@ -1,19 +1,29 @@
+use serde::Serialize;
 /**
  * Module for grouping platform and device specific metadata collection
  * functions.
  */
-
 use std::io::prelude::*;
 use std::process::Command;
 use std::process::Stdio;
 use x11rb::protocol::randr::get_monitors;
 
-use std::fmt;
+use crate::data_collector::utils;
 
 //==============================================================================
 // Structs
 //==============================================================================
 
+#[derive(Clone, Debug, Serialize)]
+pub struct Metadata {
+    user_id: String,
+    host_id: String,
+    monitor: Vec<MonitorMetadata>,
+    input_device: String,
+    os: os_info::Info,
+}
+
+#[derive(Copy, Clone, Debug, Serialize)]
 pub struct MonitorMetadata {
     name: u32,
     primary: bool,
@@ -26,36 +36,6 @@ pub struct MonitorMetadata {
     dpi: f64,
 }
 
-/// Implementation of the default formatter for `MonitorMetadata` for debug
-/// purposes.
-impl fmt::Display for MonitorMetadata {
-    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
-        write!(
-            f,
-            "{{
-                name: {}
-                primary: {}
-                x: {}
-                y: {}
-                width: {}
-                height: {}
-                width_in_millimeters: {}
-                height_in_millimeters: {}
-                dpi: {}
-            }}",
-            self.name,
-            self.primary,
-            self.x,
-            self.y,
-            self.width,
-            self.height,
-            self.width_in_millimeters,
-            self.height_in_millimeters,
-            self.dpi
-        )
-    }
-}
-
 //==============================================================================
 // Public functions
 //==============================================================================
@@ -63,23 +43,29 @@ impl fmt::Display for MonitorMetadata {
 pub fn query_metadata(
     connection: &x11rb::rust_connection::RustConnection,
     screen: &x11rb::protocol::xproto::Screen,
-) -> () {
-    // Print monitor metadata
-    let monitor_metadata = get_monitor_metadata(&connection, &screen);
-    for metadata in monitor_metadata {
-        println!("Monitor information: \n{}", &metadata);
+) -> Metadata {
+    // Currently logged on user.
+    let user_id = utils::get_env_var("USERNAME");
+
+    // Unique identifier of the host machine.
+    let host_id = get_host_id();
+
+    // Get monitor metadata.
+    let monitor = get_monitor_metadata(&connection, &screen);
+
+    // Get input device metadata.
+    let input_device = get_input_device_metadata();
+
+    // Get operating system metadata.
+    let os = get_os_metadata();
+
+    Metadata {
+        user_id,
+        host_id,
+        monitor,
+        input_device,
+        os,
     }
-
-    // Print input device metadata.
-    let input_device_metadata = get_input_device_metadata();
-    println!(
-        "Input devices with mouse capabilities: \n{}",
-        &input_device_metadata
-    );
-
-    // Print operating system metadata.
-    let os_metadata = get_os_metadata();
-    println!("Operating system information: {}", &os_metadata);
 }
 
 //==============================================================================
@@ -144,7 +130,7 @@ fn get_monitor_metadata(
 
 /// Query information about input devices with mouse capabilities.
 /// The function reads the `/proc/bus/input/devices` file and uses the `grep`
-/// command to filter four mouse devices.
+/// command to filter mouse devices.
 ///
 /// The result of the function can be interpreted as follows:
 ///
@@ -201,4 +187,22 @@ fn get_input_device_metadata() -> String {
             return String::new();
         }
     }
+}
+
+/// Get the unique identifier of the host machine by reading the
+/// `/etc/machine-id` file.
+fn get_host_id() -> String {
+    match Command::new("cat").arg("/etc/machine-id").output() {
+        Ok(output) => match String::from_utf8(output.stdout) {
+            Ok(value) => return String::from(value.trim()),
+            Err(error) => {
+                println!("Could not parse output: {}", error);
+                return String::new();
+            }
+        },
+        Err(error) => {
+            println!("Could not spawn cat: {}", error);
+            return String::new();
+        }
+    };
 }

@@ -120,10 +120,7 @@ fn check_xinput(connection: &x11rb::rust_connection::RustConnection) -> () {
     let minor = 4;
     match xinput::xi_query_version(connection, major, minor) {
         Ok(result) => match result.reply() {
-            Ok(version) => println!(
-                "XInput version: {}.{}",
-                version.major_version, version.minor_version
-            ),
+            Ok(_version) => (),
             Err(error) => panic!("Could not get reply from server: {:?}", error),
         },
         Err(error) => panic!("Could not query XInput version: {:?}", error),

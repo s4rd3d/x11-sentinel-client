@@ -32,7 +32,6 @@ pub fn run(tx: std::sync::mpsc::Sender<Status>) -> () {
 
     loop {
         // Get status from the remote server.
-        // TODO: What should happen if the status update call fails?
         let status = match get_status() {
             Ok(status) => status,
             Err(error) => panic!("Could not get status: {}", error),
