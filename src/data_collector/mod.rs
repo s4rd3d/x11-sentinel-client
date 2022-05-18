@@ -194,6 +194,10 @@ impl State {
         self.push(EventType::MetadataChangedEvent(7, metadata));
     }
 
+    fn increment_sequence_number(&mut self) -> () {
+        self.sequence_number = self.sequence_number + 1;
+    }
+
     fn push(&mut self, event: EventType) -> () {
         self.buffer.push(event);
         if self.buffer.len() > self.buffer_size_limit {
@@ -227,6 +231,8 @@ impl State {
             "chunk": send_buffer,
         });
         println!("Buffer: {:?}", body.to_string());
+
+        self.increment_sequence_number();
     }
 }
 
