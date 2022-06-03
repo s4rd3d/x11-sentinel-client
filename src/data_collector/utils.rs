@@ -2,14 +2,25 @@
  * Utility functions for the data collector module.
  */
 use std::env;
-use std::str::FromStr;
 use std::process::Command;
+use std::str::FromStr;
+use std::time::{SystemTime, UNIX_EPOCH};
 use x11rb::protocol::xinput;
 use x11rb::protocol::xproto;
 
 //==============================================================================
 // Public functions
 //==============================================================================
+
+/// Return milliseconds since 00:00:00 UTC 1 January 1970
+pub fn now() -> u64 {
+    return SystemTime::now()
+        .duration_since(UNIX_EPOCH)
+        .unwrap()
+        .as_millis()
+        .try_into()
+        .unwrap();
+}
 
 /// Generic function to get an environment variable and parse it to the desired
 /// type.
@@ -28,8 +39,8 @@ pub fn get_env_var<T: FromStr>(name: &str) -> T {
 /// user session
 pub fn get_session_id() -> String {
     let output = Command::new("who")
-    .output()
-    .expect("Failed to execute command: who");
+        .output()
+        .expect("Failed to execute command: who");
 
     // Convert result to String.
     let mut result = String::from_utf8(output.stdout).unwrap();
@@ -37,7 +48,6 @@ pub fn get_session_id() -> String {
     // Strip whitespace.
     result.retain(|c| !c.is_whitespace());
     return result;
-
 }
 
 /// Get the pointer from the X server.

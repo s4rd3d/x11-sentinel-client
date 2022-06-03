@@ -2,7 +2,6 @@
  * This module implements the main data collection logic.
  */
 use std::sync::mpsc;
-use std::time::{SystemTime, UNIX_EPOCH};
 
 use serde::Serialize;
 use serde_json::json;
@@ -16,6 +15,19 @@ use crate::status::Status;
 
 mod metadata;
 mod utils;
+
+//==============================================================================
+// Constants
+//==============================================================================
+
+const MOTION_EVENT_TYPE: u8 = 0;
+const SCROLL_EVENT_TYPE: u8 = 1;
+const TOUCH_BEGIN_EVENT_TYPE: u8 = 2;
+const TOUCH_UPDATE_EVENT_TYPE: u8 = 3;
+const TOUCH_END_EVENT_TYPE: u8 = 4;
+const BUTTON_PRESS_EVENT_TYPE: u8 = 5;
+const BUTTON_RELEASE_EVENT_TYPE: u8 = 6;
+const METADATA_CHANGED_EVENT_TYPE: u8 = 7;
 
 //==============================================================================
 // Structs
@@ -40,12 +52,7 @@ impl State {
         let buffer_size_limit: usize = utils::get_env_var("BUFFER_SIZE_LIMIT");
 
         // Milliseconds since 00:00:00 UTC 1 January 1970
-        let epoch: u64 = SystemTime::now()
-            .duration_since(UNIX_EPOCH)
-            .unwrap()
-            .as_millis()
-            .try_into()
-            .unwrap();
+        let epoch = utils::now();
 
         // Unique identifier of the current user session.
         let session_id = utils::get_session_id();
@@ -73,14 +80,14 @@ impl State {
         pointer: x11rb::protocol::xproto::QueryPointerReply,
     ) -> () {
         self.push(EventType::MotionEvent(
-            0,
+            MOTION_EVENT_TYPE,
+            event.time.into(),
             event.axisvalues_raw[0].integral,
             event.axisvalues_raw[0].frac,
             event.axisvalues_raw[1].integral,
             event.axisvalues_raw[1].frac,
             pointer.root_x,
             pointer.root_y,
-            event.time,
         ));
     }
 
@@ -91,12 +98,12 @@ impl State {
         pointer: x11rb::protocol::xproto::QueryPointerReply,
     ) -> () {
         self.push(EventType::ScrollEvent(
-            1,
+            SCROLL_EVENT_TYPE,
+            event.time.into(),
             event.axisvalues_raw[0].integral,
             event.axisvalues_raw[0].frac,
             pointer.root_x,
             pointer.root_y,
-            event.time,
         ));
     }
 
@@ -107,14 +114,14 @@ impl State {
         pointer: x11rb::protocol::xproto::QueryPointerReply,
     ) -> () {
         self.push(EventType::TouchBeginEvent(
-            2,
+            TOUCH_BEGIN_EVENT_TYPE,
+            event.time.into(),
             event.axisvalues_raw[0].integral,
             event.axisvalues_raw[0].frac,
             event.axisvalues_raw[1].integral,
             event.axisvalues_raw[1].frac,
             pointer.root_x,
             pointer.root_y,
-            event.time,
         ));
     }
 
@@ -125,14 +132,14 @@ impl State {
         pointer: x11rb::protocol::xproto::QueryPointerReply,
     ) -> () {
         self.push(EventType::TouchUpdateEvent(
-            3,
+            TOUCH_UPDATE_EVENT_TYPE,
+            event.time.into(),
             event.axisvalues_raw[0].integral,
             event.axisvalues_raw[0].frac,
             event.axisvalues_raw[1].integral,
             event.axisvalues_raw[1].frac,
             pointer.root_x,
             pointer.root_y,
-            event.time,
         ));
     }
 
@@ -143,14 +150,14 @@ impl State {
         pointer: x11rb::protocol::xproto::QueryPointerReply,
     ) -> () {
         self.push(EventType::TouchEndEvent(
-            4,
+            TOUCH_END_EVENT_TYPE,
+            event.time.into(),
             event.axisvalues_raw[0].integral,
             event.axisvalues_raw[0].frac,
             event.axisvalues_raw[1].integral,
             event.axisvalues_raw[1].frac,
             pointer.root_x,
             pointer.root_y,
-            event.time,
         ));
     }
 
@@ -161,11 +168,11 @@ impl State {
         pointer: x11rb::protocol::xproto::QueryPointerReply,
     ) -> () {
         self.push(EventType::ButtonPressEvent(
-            5,
+            BUTTON_PRESS_EVENT_TYPE,
+            event.time.into(),
             pointer.root_x,
             pointer.root_y,
             event.detail,
-            event.time,
         ));
     }
 
@@ -176,11 +183,11 @@ impl State {
         pointer: x11rb::protocol::xproto::QueryPointerReply,
     ) -> () {
         self.push(EventType::ButtonReleaseEvent(
-            6,
+            BUTTON_RELEASE_EVENT_TYPE,
+            event.time.into(),
             pointer.root_x,
             pointer.root_y,
             event.detail,
-            event.time,
         ));
     }
 
@@ -191,7 +198,11 @@ impl State {
         screen: &x11rb::protocol::xproto::Screen,
     ) -> () {
         let metadata = metadata::query_metadata(connection, screen);
-        self.push(EventType::MetadataChangedEvent(7, metadata));
+        self.push(EventType::MetadataChangedEvent(
+            METADATA_CHANGED_EVENT_TYPE,
+            utils::now(),
+            metadata,
+        ));
     }
 
     fn increment_sequence_number(&mut self) -> () {
@@ -243,14 +254,14 @@ impl State {
 #[derive(Clone, Debug, Serialize)]
 #[serde(untagged)]
 enum EventType {
-    MotionEvent(u8, i32, u32, i32, u32, i16, i16, u32),
-    ScrollEvent(u8, i32, u32, i16, i16, u32),
-    TouchBeginEvent(u8, i32, u32, i32, u32, i16, i16, u32),
-    TouchUpdateEvent(u8, i32, u32, i32, u32, i16, i16, u32),
-    TouchEndEvent(u8, i32, u32, i32, u32, i16, i16, u32),
-    ButtonPressEvent(u8, i16, i16, u32, u32),
-    ButtonReleaseEvent(u8, i16, i16, u32, u32),
-    MetadataChangedEvent(u8, metadata::Metadata),
+    MotionEvent(u8, u64, i32, u32, i32, u32, i16, i16),
+    ScrollEvent(u8, u64, i32, u32, i16, i16),
+    TouchBeginEvent(u8, u64, i32, u32, i32, u32, i16, i16),
+    TouchUpdateEvent(u8, u64, i32, u32, i32, u32, i16, i16),
+    TouchEndEvent(u8, u64, i32, u32, i32, u32, i16, i16),
+    ButtonPressEvent(u8, u64, i16, i16, u32),
+    ButtonReleaseEvent(u8, u64, i16, i16, u32),
+    MetadataChangedEvent(u8, u64, metadata::Metadata),
 }
 
 //==============================================================================
