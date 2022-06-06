@@ -234,7 +234,7 @@ impl State {
 
         let body = json!({
             "metadata": {
-                "epoch": self.epoch,
+                "epoch": { "unit": "millisecond", "value": self.epoch },
                 "session_id": self.session_id,
                 "stream_id": self.stream_id,
                 "sequence_number": self.sequence_number
