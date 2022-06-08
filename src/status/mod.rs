@@ -25,7 +25,7 @@ async fn get_status() -> Result<Status, Error> {
 }
 
 pub fn run(tx: std::sync::mpsc::Sender<Status>) -> () {
-    let status_interval: u64 = env::var("STATUS_INTERVAL")
+    let status_interval: u64 = env::var("APP_STATUS_INTERVAL")
         .expect("Could not find `STATUS_INTERVAL` environment variable.")
         .parse()
         .unwrap();
