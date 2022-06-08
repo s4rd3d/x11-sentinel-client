@@ -16,7 +16,7 @@ pub struct Status {
 #[tokio::main]
 async fn get_status() -> Result<Status, Error> {
     let request_url =
-        env::var("STATUS_URL").expect("Could not find `STATUS_URL` environment variable.");
+        env::var("APP_STATUS_URL").expect("Could not find `APP_STATUS_URL` environment variable.");
 
     let response = reqwest::get(&request_url).await?;
     let status: Status = response.json().await?;

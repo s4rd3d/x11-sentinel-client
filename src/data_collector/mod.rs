@@ -49,7 +49,7 @@ impl State {
         let buffer = vec![];
 
         // Get buffer size limit from the environment.
-        let buffer_size_limit: usize = utils::get_env_var("BUFFER_SIZE_LIMIT");
+        let buffer_size_limit: usize = utils::get_env_var("APP_BUFFER_SIZE_LIMIT");
 
         // Milliseconds since 00:00:00 UTC 1 January 1970
         let epoch = utils::now();
@@ -223,7 +223,9 @@ impl State {
         return send_buffer;
     }
 
-    fn submit(&mut self) -> () {
+    // Send the content of the buffer to the remote server
+    #[tokio::main]
+    async fn submit(&mut self) -> () {
         // Retrieve data
         let send_buffer = self.flush_buffer();
 
@@ -232,6 +234,7 @@ impl State {
             return;
         }
 
+        // Setup request body
         let body = json!({
             "metadata": {
                 "epoch": { "unit": "millisecond", "value": self.epoch },
@@ -241,7 +244,25 @@ impl State {
             },
             "chunk": send_buffer,
         });
-        println!("Buffer: {:?}", body.to_string());
+
+        // Setup content type and API key argument
+        let content_type_base = String::from("text/plain");
+        let apikey_name: String = utils::get_env_var("APP_API_KEY_NAME");
+        let apikey_value: String = utils::get_env_var("APP_API_KEY_VALUE");
+        let content_type = format!("{}; {}={}", content_type_base, apikey_name, apikey_value);
+
+        // Request URL
+        let url: String = utils::get_env_var("APP_SUBMIT_URL");
+
+        let client = reqwest::Client::new();
+
+        // Send the request
+        let _result = client
+            .post(url)
+            .json(&body)
+            .header("Content-Type", content_type)
+            .send()
+            .await;
 
         self.increment_sequence_number();
     }
