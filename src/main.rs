@@ -1,14 +1,19 @@
+use std::env;
 use std::sync::mpsc;
 use std::thread;
-use dotenv::dotenv;
 
-mod status;
+use dotenv;
+
 mod data_collector;
-
+mod status;
 
 fn main() {
-    // Setup environment variables from the .env file
-    dotenv().ok();
+    // Load environment variables for the specified runtime
+    let runtime_env =
+        env::var("RUNTIME_ENV").expect("`$RUNTIME_ENV` environment variable is not specified.");
+
+    // Setup environment variables from the specified env file
+    dotenv::from_filename(format!("env.{}", runtime_env)).ok();
 
     // Create communication channel between threads
     let (tx, rx) = mpsc::channel();
