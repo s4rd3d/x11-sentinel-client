@@ -22,31 +22,35 @@ Currently only compiling from source is supported.
 
 ### Building the project
 
-1.  Define the following variables:
-
-    ```
-    # local, staging, test or live
-    $ export RUNTIME_ENV=...
-    ```
-
-2.  Install the dependencies:
+1.  Install the dependencies:
 
     ```
     make install-deps
     ```
 
-3.  Build the package:
-
-    ```
-    make compile
-    ```
+2.  Execute `make` to compile the code, build the documentation and run tests.
 
 ### Running the project
 
 You can run the built binary with the following command:
 
 ```
-make run
+make run ENV=<env_file>
+```
+
+For example, to run the project locally, execute the following command:
+
+```
+make run ENV=env.local
+```
+
+## Documentation
+
+Generate the documentation and make it available in
+`target/doc/x11_sentinel_client/index.html` with the following command:
+
+```
+make doc
 ```
 
 ## License

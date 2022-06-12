@@ -9,22 +9,61 @@ BUILD_DIR := $(ABS_DIR)/target
 # Targets
 #-------------------------------------------------------------------------------
 
+# Default target
+.PHONY: default
+default: all
+
+# Generate docs, compile the source code and run tests
+.PHONY: all
+all: docs compile check test
+
+# Cleanup targets, generate docs, compile the source code and run tests
+.PHONY: everything
+everything: mrproper all
+
+# Cleanup targets
+.PHONY: mrproper
+mrproper:
+	$(RM) -r $(BUILD_DIR)
+
+# Cleanup built binaries
+.PHONY: clean
+clean:
+	cargo clean
+
 # Install dependencies
 .PHONY: install-deps
 install-deps:
 	cargo fetch
+
+# Upgrade dependencies
+.PHONY: upgrade-deps
+upgrade-deps:
+	cargo update
 
 # Compile and optimize the application
 .PHONY: compile
 compile:
 	cargo build --release
 
-# Run the built binary
-.PHONY: run
-run:
-	cargo run
+# Generate docs
+.PHONY: docs doc
+docs: doc
+doc:
+	cargo doc
 
-# Cleanup targets
-.PHONY: mrproper
-mrproper:
-	$(RM) -r $(BUILD_DIR)
+# Run the built binary
+.PHONY: start run
+start: run
+run:
+	cargo run $(ENV)
+
+# Run tests
+.PHONY: test
+test:
+	cargo test
+
+# Check a local package and all of its dependencies for errors
+.PHONY: check
+check:
+	cargo check

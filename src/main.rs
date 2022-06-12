@@ -8,12 +8,16 @@ mod data_collector;
 mod status;
 
 fn main() {
+    let args: Vec<String> = env::args().collect();
+    if args.len() < 2 {
+        panic!("Environment file was not specified. Start the application with `make run ENV=<environment file>`");
+    }
+
     // Load environment variables for the specified runtime
-    let runtime_env =
-        env::var("RUNTIME_ENV").expect("`$RUNTIME_ENV` environment variable is not specified.");
+    let env = &args[1];
 
     // Setup environment variables from the specified env file
-    dotenv::from_filename(format!("env.{}", runtime_env)).ok();
+    dotenv::from_filename(env).ok();
 
     // Create communication channel between threads
     let (tx, rx) = mpsc::channel();
