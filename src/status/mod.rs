@@ -24,7 +24,7 @@ async fn get_status() -> Result<Status, Error> {
     Ok(status)
 }
 
-pub fn run(tx: std::sync::mpsc::Sender<Status>) -> () {
+pub fn run() -> () {
     let status_interval: u64 = env::var("APP_STATUS_INTERVAL")
         .expect("Could not find `STATUS_INTERVAL` environment variable.")
         .parse()
@@ -50,12 +50,6 @@ pub fn run(tx: std::sync::mpsc::Sender<Status>) -> () {
             Ok(_handle) => (),
             Err(error) => println!("Could not show notification: {}", error),
         };
-
-        // Send status update to the main thread.
-        match tx.send(status) {
-            Ok(_) => (),
-            Err(error) => println!("Could not send status update: {}", error),
-        }
 
         // Sleep for a configured amount of time.
         thread::sleep(Duration::from_secs(status_interval));

@@ -11,8 +11,6 @@ use x11rb::protocol::Event;
 
 use uuid::Uuid;
 
-use crate::status::Status;
-
 mod metadata;
 mod utils;
 
@@ -289,7 +287,7 @@ enum EventType {
 // Public functions
 //==============================================================================
 
-pub fn run(rx: mpsc::Receiver<Status>) -> () {
+pub fn run() -> () {
     // Setup connection to the X server.
     let (connection, screen_number) = utils::setup_connection();
 
@@ -319,15 +317,6 @@ pub fn run(rx: mpsc::Receiver<Status>) -> () {
 
     // Main event loop.
     loop {
-        // Process incoming status updates (if any).
-        match rx.try_recv() {
-            Ok(msg) => println!(
-                "phase: {} description: {}, value: {}",
-                msg.phase, msg.description, msg.value
-            ),
-            Err(_) => (),
-        }
-
         // Query metadata if needed.
         match metadata_rx.try_recv() {
             Ok(()) => state.handle_metadata_changed_event(&connection, screen),

@@ -1,5 +1,4 @@
 use std::env;
-use std::sync::mpsc;
 use std::thread;
 
 use dotenv;
@@ -19,14 +18,11 @@ fn main() {
     // Setup environment variables from the specified env file
     dotenv::from_filename(env).ok();
 
-    // Create communication channel between threads
-    let (tx, rx) = mpsc::channel();
-
     // Start the status polling service
     thread::spawn(move || {
-        status::run(tx);
+        status::run();
     });
 
     // Start the data collection
-    data_collector::run(rx);
+    data_collector::run();
 }
