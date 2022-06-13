@@ -1,3 +1,4 @@
+use chrono::Duration;
 use serde::Serialize;
 /**
  * Module for grouping platform and device specific metadata collection
@@ -6,6 +7,7 @@ use serde::Serialize;
 use std::io::prelude::*;
 use std::process::Command;
 use std::process::Stdio;
+use timer::Timer;
 use x11rb::protocol::randr::get_monitors;
 
 use crate::data_collector::utils;
@@ -66,6 +68,19 @@ pub fn query_metadata(
         input_device,
         os,
     }
+}
+
+/// Start a repeating timer and send a message periodically to query metadata.
+pub fn start_repeating_timer(tx: std::sync::mpsc::Sender<()>) -> (timer::Timer, timer::Guard) {
+    let query_interval = utils::get_env_var("APP_METADATA_QUERY_INTERVAL");
+    let timer = Timer::new();
+    let guard = timer.schedule_repeating(Duration::milliseconds(query_interval), move || match tx
+        .send(())
+    {
+        Ok(_) => (),
+        Err(error) => println!("Could not send message: {}", error),
+    });
+    return (timer, guard);
 }
 
 //==============================================================================

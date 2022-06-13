@@ -304,6 +304,10 @@ pub fn run(rx: mpsc::Receiver<Status>) -> () {
     // Collect platform and device specific metadata.
     state.handle_metadata_changed_event(&connection, screen);
 
+    // Create and start a repeating timer for querying metadata.
+    let (metadata_tx, metadata_rx) = mpsc::channel();
+    let (_timer, _guard) = metadata::start_repeating_timer(metadata_tx);
+
     // Apply specific event masks to the connection.
     utils::select_events(&connection, screen);
 
@@ -324,7 +328,13 @@ pub fn run(rx: mpsc::Receiver<Status>) -> () {
             Err(_) => (),
         }
 
-        // Poll for a new event, the program should not panic on connection
+        // Query metadata if needed.
+        match metadata_rx.try_recv() {
+            Ok(()) => state.handle_metadata_changed_event(&connection, screen),
+            Err(_) => (),
+        }
+
+        // Wait for a new event, the program should not panic on connection
         // error.
         let event = match connection.wait_for_event() {
             Ok(event) => event,
