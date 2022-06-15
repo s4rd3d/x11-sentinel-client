@@ -2,6 +2,7 @@
  * This module implements the main data collection logic.
  */
 use std::sync::mpsc;
+use std::thread;
 
 use serde::Serialize;
 use serde_json::json;
@@ -190,12 +191,8 @@ impl State {
     }
 
     /// Event handler for `MetadataChangedEvent`.
-    fn handle_metadata_changed_event(
-        &mut self,
-        connection: &x11rb::rust_connection::RustConnection,
-        screen: &x11rb::protocol::xproto::Screen,
-    ) -> () {
-        let metadata = metadata::query_metadata(connection, screen);
+    fn handle_metadata_changed_event(&mut self) -> () {
+        let metadata = metadata::query_metadata();
         self.push(EventType::MetadataChangedEvent(
             METADATA_CHANGED_EVENT_TYPE,
             utils::now(),
@@ -288,23 +285,66 @@ enum EventType {
 //==============================================================================
 
 pub fn run() -> () {
+    let mut state = State::new();
+
+    // Collect platform and device specific metadata.
+    state.handle_metadata_changed_event();
+
+    // Create and start a repeating timer for querying metadata.
+    let (tx, rx) = mpsc::channel();
+    let (_timer, _guard) = metadata::start_repeating_timer(tx.clone());
+
+    // Start the status polling service
+    thread::spawn(move || {
+        collect(tx.clone());
+    });
+
+    // Main event loop.
+    loop {
+        match rx.recv() {
+            Ok(msg) => match msg {
+                utils::Message::MetadataChangedMessage => state.handle_metadata_changed_event(),
+                utils::Message::X11EventMessage(event, pointer) => {
+                    // Handle motion events.
+                    match event {
+                        Event::XinputRawMotion(event) => match event.axisvalues_raw.len() {
+                            1 => state.handle_scroll_event(event, pointer),
+                            2 => state.handle_raw_motion_event(event, pointer),
+                            _ => (),
+                        },
+                        Event::XinputRawTouchBegin(event) => {
+                            state.handle_touch_begin_event(event, pointer);
+                        }
+                        Event::XinputRawTouchUpdate(event) => {
+                            state.handle_touch_update_event(event, pointer);
+                        }
+                        Event::XinputRawTouchEnd(event) => {
+                            state.handle_touch_end_event(event, pointer);
+                        }
+                        Event::XinputRawButtonPress(event) => {
+                            state.handle_button_press_event(event, pointer);
+                        }
+                        Event::XinputRawButtonRelease(event) => {
+                            state.handle_button_release_event(event, pointer);
+                        }
+                        _ => (),
+                    }
+                }
+            },
+            Err(_) => (),
+        }
+    }
+}
+
+fn collect(tx: std::sync::mpsc::Sender<utils::Message>) -> () {
     // Setup connection to the X server.
     let (connection, screen_number) = utils::setup_connection();
-
-    let mut state = State::new();
 
     // Setup connection.
     let setup = &connection.setup();
 
     // Select screen.
     let screen = &setup.roots[screen_number];
-
-    // Collect platform and device specific metadata.
-    state.handle_metadata_changed_event(&connection, screen);
-
-    // Create and start a repeating timer for querying metadata.
-    let (metadata_tx, metadata_rx) = mpsc::channel();
-    let (_timer, _guard) = metadata::start_repeating_timer(metadata_tx);
 
     // Apply specific event masks to the connection.
     utils::select_events(&connection, screen);
@@ -315,14 +355,7 @@ pub fn run() -> () {
         Err(error) => panic!("Error, flush did not succeed: {:?}", error),
     }
 
-    // Main event loop.
     loop {
-        // Query metadata if needed.
-        match metadata_rx.try_recv() {
-            Ok(()) => state.handle_metadata_changed_event(&connection, screen),
-            Err(_) => (),
-        }
-
         // Wait for a new event, the program should not panic on connection
         // error.
         let event = match connection.wait_for_event() {
@@ -336,29 +369,9 @@ pub fn run() -> () {
         // Get the transformed pointer coordinates too for comparison.
         let pointer = utils::get_pointer(&connection, screen.root);
 
-        // Handle motion events.
-        match event {
-            Event::XinputRawMotion(event) => match event.axisvalues_raw.len() {
-                1 => state.handle_scroll_event(event, pointer),
-                2 => state.handle_raw_motion_event(event, pointer),
-                _ => (),
-            },
-            Event::XinputRawTouchBegin(event) => {
-                state.handle_touch_begin_event(event, pointer);
-            }
-            Event::XinputRawTouchUpdate(event) => {
-                state.handle_touch_update_event(event, pointer);
-            }
-            Event::XinputRawTouchEnd(event) => {
-                state.handle_touch_end_event(event, pointer);
-            }
-            Event::XinputRawButtonPress(event) => {
-                state.handle_button_press_event(event, pointer);
-            }
-            Event::XinputRawButtonRelease(event) => {
-                state.handle_button_release_event(event, pointer);
-            }
-            _ => continue,
+        match tx.send(utils::Message::X11EventMessage(event, pointer)) {
+            Ok(()) => (),
+            Err(err) => println!("Could not send message: {}", err),
         }
     }
 }

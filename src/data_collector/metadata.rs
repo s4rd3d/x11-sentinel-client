@@ -8,6 +8,7 @@ use std::io::prelude::*;
 use std::process::Command;
 use std::process::Stdio;
 use timer::Timer;
+use x11rb::connection::Connection;
 use x11rb::protocol::randr::get_monitors;
 
 use crate::data_collector::utils;
@@ -42,10 +43,16 @@ pub struct MonitorMetadata {
 // Public functions
 //==============================================================================
 
-pub fn query_metadata(
-    connection: &x11rb::rust_connection::RustConnection,
-    screen: &x11rb::protocol::xproto::Screen,
-) -> Metadata {
+pub fn query_metadata() -> Metadata {
+    // Setup connection to the X server.
+    let (connection, screen_number) = utils::setup_connection();
+
+    // Setup connection.
+    let setup = &connection.setup();
+
+    // Select screen.
+    let screen = &setup.roots[screen_number];
+
     // Currently logged on user.
     let user_id = utils::get_env_var("USERNAME");
 
@@ -71,11 +78,13 @@ pub fn query_metadata(
 }
 
 /// Start a repeating timer and send a message periodically to query metadata.
-pub fn start_repeating_timer(tx: std::sync::mpsc::Sender<()>) -> (timer::Timer, timer::Guard) {
+pub fn start_repeating_timer(
+    tx: std::sync::mpsc::Sender<utils::Message>,
+) -> (timer::Timer, timer::Guard) {
     let query_interval = utils::get_env_var("APP_METADATA_QUERY_INTERVAL");
     let timer = Timer::new();
     let guard = timer.schedule_repeating(Duration::milliseconds(query_interval), move || match tx
-        .send(())
+        .send(utils::Message::MetadataChangedMessage)
     {
         Ok(_) => (),
         Err(error) => println!("Could not send message: {}", error),

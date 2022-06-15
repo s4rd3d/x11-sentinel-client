@@ -9,6 +9,19 @@ use x11rb::protocol::xinput;
 use x11rb::protocol::xproto;
 
 //==============================================================================
+// Enums
+//==============================================================================
+
+#[derive(Clone, Debug)]
+pub enum Message {
+    MetadataChangedMessage,
+    X11EventMessage(
+        x11rb::protocol::Event,
+        x11rb::protocol::xproto::QueryPointerReply,
+    ),
+}
+
+//==============================================================================
 // Public functions
 //==============================================================================
 
