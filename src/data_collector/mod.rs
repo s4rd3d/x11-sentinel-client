@@ -299,9 +299,11 @@ pub fn run() -> () {
         collect(tx.clone());
     });
 
+    let idle_timeout = utils::get_env_var("APP_IDLE_TIMEOUT");
+
     // Main event loop.
     loop {
-        match rx.recv() {
+        match rx.recv_timeout(std::time::Duration::from_millis(idle_timeout)) {
             Ok(msg) => match msg {
                 utils::Message::MetadataChangedMessage => state.handle_metadata_changed_event(),
                 utils::Message::X11EventMessage(event, pointer) => {
@@ -331,7 +333,8 @@ pub fn run() -> () {
                     }
                 }
             },
-            Err(_) => (),
+            Err(mpsc::RecvTimeoutError::Timeout) => state.submit(),
+            Err(_) => continue,
         }
     }
 }
