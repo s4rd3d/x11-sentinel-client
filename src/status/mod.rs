@@ -1,9 +1,10 @@
 use notify_rust::Notification;
 use reqwest::Error;
 use serde::Deserialize;
-use std::env;
 use std::thread;
 use std::time::Duration;
+
+use crate::config;
 
 #[derive(Deserialize)]
 pub struct Status {
@@ -14,25 +15,20 @@ pub struct Status {
 
 /// Send a HTTP GET request to query the status of the client.
 #[tokio::main]
-async fn get_status() -> Result<Status, Error> {
-    let request_url =
-        env::var("APP_STATUS_URL").expect("Could not find `APP_STATUS_URL` environment variable.");
-
-    let response = reqwest::get(&request_url).await?;
+async fn get_status(status_url: &String) -> Result<Status, Error> {
+    let response = reqwest::get(status_url).await?;
     let status: Status = response.json().await?;
 
     Ok(status)
 }
 
-pub fn run() -> () {
-    let status_interval: u64 = env::var("APP_STATUS_INTERVAL")
-        .expect("Could not find `STATUS_INTERVAL` environment variable.")
-        .parse()
-        .unwrap();
+pub fn run(config: config::Config) -> () {
+    let status_url = config.status_url.unwrap();
+    let status_interval = config.status_interval.unwrap();
 
     loop {
         // Get status from the remote server.
-        let status = match get_status() {
+        let status = match get_status(&status_url) {
             Ok(status) => status,
             Err(error) => panic!("Could not get status: {}", error),
         };

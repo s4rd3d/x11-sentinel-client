@@ -1,28 +1,19 @@
-use std::env;
 use std::thread;
 
-use dotenv;
-
+mod config;
 mod data_collector;
 mod status;
 
 fn main() {
-    let args: Vec<String> = env::args().collect();
-    if args.len() < 2 {
-        panic!("Environment file was not specified. Start the application with `make run ENV=<environment file>`");
-    }
-
-    // Load environment variables for the specified runtime
-    let env = &args[1];
-
-    // Setup environment variables from the specified env file
-    dotenv::from_filename(env).ok();
+    // Parse command line arguments and create application configuration
+    let config = config::Config::new();
+    let config2 = config.clone();
 
     // Start the status polling service
     thread::spawn(move || {
-        status::run();
+        status::run(config);
     });
 
     // Start the data collection
-    data_collector::run();
+    data_collector::run(config2);
 }

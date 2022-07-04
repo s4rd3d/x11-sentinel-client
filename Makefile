@@ -56,7 +56,7 @@ doc:
 .PHONY: start run
 start: run
 run:
-	cargo run $(ENV)
+	cargo run
 
 # Run tests
 .PHONY: test

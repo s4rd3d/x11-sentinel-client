@@ -12,6 +12,8 @@ use x11rb::protocol::Event;
 
 use uuid::Uuid;
 
+use crate::config;
+
 mod metadata;
 mod utils;
 
@@ -35,6 +37,9 @@ const METADATA_CHANGED_EVENT_TYPE: u8 = 7;
 struct State {
     buffer: Vec<EventType>,
     buffer_size_limit: usize,
+    api_key_name: String,
+    api_key_value: String,
+    submit_url: String,
     epoch: u64,
     session_id: String,
     stream_id: String,
@@ -43,12 +48,22 @@ struct State {
 
 impl State {
     /// Constructor for the State object.
-    fn new() -> State {
+    fn new(config: config::Config) -> State {
         // Initialize empty buffer
         let buffer = vec![];
 
-        // Get buffer size limit from the environment.
-        let buffer_size_limit: usize = utils::get_env_var("APP_BUFFER_SIZE_LIMIT");
+        // Upper limit for the event buffer's size. When the event buffer's size
+        // reaches this number it triggers a submission.
+        let buffer_size_limit: usize = config.buffer_size_limit.unwrap();
+
+        // Name of the API key that is sent with every submission request.
+        let api_key_name: String = config.api_key_name.unwrap();
+
+        // Value of the API key that is sent with every submission request.
+        let api_key_value: String = config.api_key_value.unwrap();
+
+        // URL of the submission API endpoint.
+        let submit_url: String = config.submit_url.unwrap();
 
         // Milliseconds since 00:00:00 UTC 1 January 1970
         let epoch = utils::now();
@@ -65,6 +80,9 @@ impl State {
         State {
             buffer,
             buffer_size_limit,
+            api_key_name,
+            api_key_value,
+            submit_url,
             epoch,
             session_id,
             stream_id,
@@ -242,18 +260,16 @@ impl State {
 
         // Setup content type and API key argument
         let content_type_base = String::from("text/plain");
-        let apikey_name: String = utils::get_env_var("APP_API_KEY_NAME");
-        let apikey_value: String = utils::get_env_var("APP_API_KEY_VALUE");
-        let content_type = format!("{}; {}={}", content_type_base, apikey_name, apikey_value);
-
-        // Request URL
-        let url: String = utils::get_env_var("APP_SUBMIT_URL");
+        let content_type = format!(
+            "{}; {}={}",
+            content_type_base, self.api_key_name, self.api_key_value
+        );
 
         let client = reqwest::Client::new();
 
         // Send the request
         let _result = client
-            .post(url)
+            .post(&self.submit_url)
             .json(&body)
             .header("Content-Type", content_type)
             .send()
@@ -284,22 +300,22 @@ enum EventType {
 // Public functions
 //==============================================================================
 
-pub fn run() -> () {
-    let mut state = State::new();
+pub fn run(config: config::Config) -> () {
+    let idle_timeout = config.idle_timeout.unwrap();
+    let metadata_query_interval = config.metadata_query_interval.unwrap();
+    let mut state = State::new(config);
 
     // Collect platform and device specific metadata.
     state.handle_metadata_changed_event();
 
     // Create and start a repeating timer for querying metadata.
     let (tx, rx) = mpsc::channel();
-    let (_timer, _guard) = metadata::start_repeating_timer(tx.clone());
+    let (_timer, _guard) = metadata::start_repeating_timer(tx.clone(), metadata_query_interval);
 
     // Start the status polling service
     thread::spawn(move || {
         collect(tx.clone());
     });
-
-    let idle_timeout = utils::get_env_var("APP_IDLE_TIMEOUT");
 
     // Main event loop.
     loop {

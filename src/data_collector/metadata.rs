@@ -80,8 +80,8 @@ pub fn query_metadata() -> Metadata {
 /// Start a repeating timer and send a message periodically to query metadata.
 pub fn start_repeating_timer(
     tx: std::sync::mpsc::Sender<utils::Message>,
+    query_interval: i64,
 ) -> (timer::Timer, timer::Guard) {
-    let query_interval = utils::get_env_var("APP_METADATA_QUERY_INTERVAL");
     let timer = Timer::new();
     let guard = timer.schedule_repeating(Duration::milliseconds(query_interval), move || match tx
         .send(utils::Message::MetadataChangedMessage)
