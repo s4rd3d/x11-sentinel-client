@@ -1,5 +1,6 @@
 # Build artefacts
 /target
+/bin
 
 # Environment files
 .env

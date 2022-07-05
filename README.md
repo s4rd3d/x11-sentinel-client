@@ -30,11 +30,22 @@ Currently only compiling from source is supported.
 
 2.  Execute `make` to compile the code, build the documentation and run tests.
 
+### Building the project with Docker
+
+To build the project and generate a single executable binary issue the following
+command:
+
+```
+docker build -o bin .
+```
+
+The application will be available under `bin/x11-sentinel-client`.
+
 ### Running the project
 
 The application can be configured either via command line arguments or with
 environment variables. The command line arguments take priority over the
-envrionment variables. If neither are provided, then default values are used.
+environment variables. If neither are provided, then default values are used.
 
 The application can be configured by defining the following environment
 variables:
