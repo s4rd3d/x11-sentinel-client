@@ -20,6 +20,13 @@ Currently only compiling from source is supported.
     apt install pkg-config
     ```
 
+*   **suckless-tools**
+    To install `suckless-tools` run the following command:
+
+    ```
+    apt install suckless-tools
+    ```
+
 ### Building the project
 
 1.  Install the dependencies:
@@ -67,6 +74,19 @@ variables:
 
     If no new event is generated for this number of milliseconds, a submission
     gets triggered.
+
+*   `APP_LOCK_ENABLED`
+
+    Whether X session locking functionality is enabled.
+
+*   `APP_LOCK_THRESHOLD`
+
+    If the user's score is lower than this predefined constant and session
+    locking is enabled, then the session locking utility is executed.
+
+*   `APP_LOCK_UTILITY`
+
+    X session lock utility program that is used to lock the session when needed.
 
 *   `APP_METADATA_QUERY_INTERVAL`
 

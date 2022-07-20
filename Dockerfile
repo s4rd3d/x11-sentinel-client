@@ -17,6 +17,7 @@ RUN apt update && \
         openssl \
         libssl-dev \
         pkg-config \
+        suckless-tools \
     ' && \
    apt-get install -y $build_deps
 
