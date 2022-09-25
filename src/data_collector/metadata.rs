@@ -18,8 +18,9 @@ use crate::data_collector::utils;
 //==============================================================================
 
 #[derive(Clone, Debug, Serialize)]
+#[serde(rename_all = "camelCase")]
 pub struct Metadata {
-    user_id: String,
+    user_name: String,
     host_id: String,
     monitor: Vec<MonitorMetadata>,
     input_device: String,
@@ -27,6 +28,7 @@ pub struct Metadata {
 }
 
 #[derive(Copy, Clone, Debug, Serialize)]
+#[serde(rename_all = "camelCase")]
 pub struct MonitorMetadata {
     name: u32,
     primary: bool,
@@ -54,7 +56,7 @@ pub fn query_metadata() -> Metadata {
     let screen = &setup.roots[screen_number];
 
     // Currently logged on user.
-    let user_id = utils::get_env_var("USERNAME");
+    let user_name = utils::get_env_var("USERNAME");
 
     // Unique identifier of the host machine.
     let host_id = get_host_id();
@@ -69,7 +71,7 @@ pub fn query_metadata() -> Metadata {
     let os = get_os_metadata();
 
     Metadata {
-        user_id,
+        user_name,
         host_id,
         monitor,
         input_device,

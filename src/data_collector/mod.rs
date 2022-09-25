@@ -44,6 +44,7 @@ struct State {
     session_id: String,
     stream_id: String,
     sequence_number: u64,
+    user_id: String,
 }
 
 impl State {
@@ -77,6 +78,9 @@ impl State {
         // Sequence number for chunk submissions starting at 0.
         let sequence_number = 0;
 
+        // User ID
+        let user_id = config.user_id.unwrap();
+
         State {
             buffer,
             buffer_size_limit,
@@ -87,6 +91,7 @@ impl State {
             session_id,
             stream_id,
             sequence_number,
+            user_id,
         }
     }
 
@@ -251,9 +256,10 @@ impl State {
         let body = json!({
             "metadata": {
                 "epoch": { "unit": "millisecond", "value": self.epoch },
-                "session_id": self.session_id,
-                "stream_id": self.stream_id,
-                "sequence_number": self.sequence_number
+                "sessionId": self.session_id,
+                "streamId": self.stream_id,
+                "sequenceNumber": self.sequence_number,
+                "userId": self.user_id
             },
             "chunk": send_buffer,
         });
