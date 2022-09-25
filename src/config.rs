@@ -18,9 +18,10 @@ const DEFAULT_APP_LOCK_ENABLED: bool = false;
 const DEFAULT_APP_LOCK_THRESHOLD: f64 = 0.5;
 const DEFAULT_APP_LOCK_UTILITY: &str = "slock";
 const DEFAULT_APP_METADATA_QUERY_INTERVAL: i64 = 600000;
+const DEFAULT_APP_STATUS_BASE_URL: &str = "http://localhost:3000/status";
 const DEFAULT_APP_STATUS_INTERVAL: u64 = 100;
-const DEFAULT_APP_STATUS_URL: &str = "http://localhost:3000/status";
 const DEFAULT_APP_SUBMIT_URL: &str = "http://localhost:3000/chunk";
+const DEFAULT_APP_USER_ID: &str = "default_user";
 
 //==============================================================================
 // Structs
@@ -65,17 +66,21 @@ pub struct Config {
     #[clap(long, value_parser)]
     pub metadata_query_interval: Option<i64>,
 
+    /// Base URL of the status API endpoint.
+    #[clap(long, value_parser)]
+    pub status_base_url: Option<String>,
+
     /// Query interval of the client's status in seconds.
     #[clap(long, value_parser)]
     pub status_interval: Option<u64>,
 
-    /// URL of the status API endpoint.
-    #[clap(long, value_parser)]
-    pub status_url: Option<String>,
-
     /// URL of the submission API endpoint.
     #[clap(long, value_parser)]
     pub submit_url: Option<String>,
+
+    /// Unique identifier of the user
+    #[clap(long, value_parser)]
+    pub user_id: Option<String>,
 }
 
 impl Config {
@@ -90,9 +95,10 @@ impl Config {
         config.set_lock_threshold();
         config.set_lock_utility();
         config.set_metadata_query_interval();
+        config.status_base_url();
         config.set_status_interval();
-        config.set_status_url();
         config.set_submit_url();
+        config.set_user_id();
         return config;
     }
 
@@ -140,10 +146,8 @@ impl Config {
         match &self.idle_timeout {
             Some(_value) => (),
             None => {
-                self.idle_timeout = Some(get_env_var_or(
-                    "APP_IDLE_TIMEOUT",
-                    DEFAULT_APP_IDLE_TIMEOUT,
-                ))
+                self.idle_timeout =
+                    Some(get_env_var_or("APP_IDLE_TIMEOUT", DEFAULT_APP_IDLE_TIMEOUT))
             }
         }
     }
@@ -153,10 +157,8 @@ impl Config {
         match &self.lock_enabled {
             Some(_value) => (),
             None => {
-                self.lock_enabled = Some(get_env_var_or(
-                    "APP_LOCK_ENABLED",
-                    DEFAULT_APP_LOCK_ENABLED,
-                ))
+                self.lock_enabled =
+                    Some(get_env_var_or("APP_LOCK_ENABLED", DEFAULT_APP_LOCK_ENABLED))
             }
         }
     }
@@ -200,6 +202,19 @@ impl Config {
         }
     }
 
+    /// Setter method for the `status_base_url` field.
+    fn status_base_url(&mut self) -> () {
+        match &self.status_base_url {
+            Some(_value) => (),
+            None => {
+                self.status_base_url = Some(get_env_var_or(
+                    "APP_STATUS_BASE_URL",
+                    DEFAULT_APP_STATUS_BASE_URL.to_string(),
+                ))
+            }
+        }
+    }
+
     /// Setter method for the `status_interval` field.
     fn set_status_interval(&mut self) -> () {
         match &self.status_interval {
@@ -213,19 +228,6 @@ impl Config {
         }
     }
 
-    /// Setter method for the `status_url` field.
-    fn set_status_url(&mut self) -> () {
-        match &self.status_url {
-            Some(_value) => (),
-            None => {
-                self.status_url = Some(get_env_var_or(
-                    "APP_STATUS_URL",
-                    DEFAULT_APP_STATUS_URL.to_string(),
-                ))
-            }
-        }
-    }
-
     /// Setter method for the `submit_url` field.
     fn set_submit_url(&mut self) -> () {
         match &self.submit_url {
@@ -234,6 +236,19 @@ impl Config {
                 self.submit_url = Some(get_env_var_or(
                     "APP_SUBMIT_URL",
                     DEFAULT_APP_SUBMIT_URL.to_string(),
+                ))
+            }
+        }
+    }
+
+    /// Setter method for the `user_id` field.
+    fn set_user_id(&mut self) -> () {
+        match &self.user_id {
+            Some(_value) => (),
+            None => {
+                self.user_id = Some(get_env_var_or(
+                    "USER_ID",
+                    DEFAULT_APP_USER_ID.to_string(),
                 ))
             }
         }

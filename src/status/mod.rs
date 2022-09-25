@@ -23,11 +23,14 @@ pub struct Status {
 //==============================================================================
 
 pub fn run(config: config::Config) -> () {
-    let status_url = config.status_url.unwrap();
+    let status_base_url = config.status_base_url.unwrap();
     let status_interval = config.status_interval.unwrap();
     let lock_utility = config.lock_utility.unwrap();
     let lock_enabled = config.lock_enabled.unwrap();
     let lock_threshold = config.lock_threshold.unwrap();
+    let user_id = config.user_id.unwrap();
+
+    let status_url = format!("{}/{}", status_base_url, user_id);
 
     loop {
         // Get status from the remote server.

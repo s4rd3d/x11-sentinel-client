@@ -92,13 +92,13 @@ variables:
 
     Query interval of the platform specific metadata in milliseconds.
 
+*   `APP_STATUS_BASE_URL`
+
+    Base URL of the status API endpoint.
+
 *   `APP_STATUS_INTERVAL`
 
     Query interval of the client's status in seconds.
-
-*   `APP_STATUS_URL`
-
-    URL of the status API endpoint.
 
 *   `APP_SUBMIT_URL`
 
