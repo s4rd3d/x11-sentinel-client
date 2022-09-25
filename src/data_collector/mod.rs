@@ -264,20 +264,13 @@ impl State {
             "chunk": send_buffer,
         });
 
-        // Setup content type and API key argument
-        let content_type_base = String::from("text/plain");
-        let content_type = format!(
-            "{}; {}={}",
-            content_type_base, self.api_key_name, self.api_key_value
-        );
-
         let client = reqwest::Client::new();
 
         // Send the request
         let _result = client
             .post(&self.submit_url)
             .json(&body)
-            .header("Content-Type", content_type)
+            .header(&self.api_key_name, &self.api_key_value)
             .send()
             .await;
 
