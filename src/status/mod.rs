@@ -42,7 +42,9 @@ pub fn run(config: config::Config) -> () {
         // If session locking is enabled and the user's score is lower than a
         // predefined constant lock the X session by executing the lock utility
         // program.
-        if lock_enabled && status.value < lock_threshold {
+        if lock_enabled &&
+           status.phase == "verify" &&
+           status.value < lock_threshold {
             Command::new(&lock_utility)
                 .spawn()
                 .expect("Could not lock session.");

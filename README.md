@@ -104,6 +104,10 @@ variables:
 
     URL of the submit API endpoint.
 
+*   `APP_USER_ID`
+
+    User ID which identifies the current user.
+
 You can run the built binary with the following command:
 
 ```

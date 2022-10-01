@@ -247,7 +247,7 @@ impl Config {
             Some(_value) => (),
             None => {
                 self.user_id = Some(get_env_var_or(
-                    "USER_ID",
+                    "APP_USER_ID",
                     DEFAULT_APP_USER_ID.to_string(),
                 ))
             }
