@@ -5,8 +5,6 @@ protocol, implemented in Rust.
 
 ## Building and running the project
 
-Currently only compiling from source is supported.
-
 ### Dependencies
 
 *   **cargo**
@@ -114,11 +112,17 @@ You can run the built binary with the following command:
 make run
 ```
 
+Or start the built binary with hand:
+
+```
+bin/x11-sentinel-client
+```
+
 For more information on configuring the application via command line arguments
 execute the following command:
 
 ```
-x11-sentinel-client --help
+bin/x11-sentinel-client --help
 ```
 
 ## Documentation
