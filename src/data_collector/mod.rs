@@ -10,8 +10,6 @@ use serde_json::json;
 use x11rb::connection::Connection;
 use x11rb::protocol::Event;
 
-use uuid::Uuid;
-
 use crate::config;
 
 mod metadata;
@@ -49,7 +47,7 @@ struct State {
 
 impl State {
     /// Constructor for the State object.
-    fn new(config: config::Config) -> State {
+    fn new(config: config::Config, stream_id: String) -> State {
         // Initialize empty buffer
         let buffer = vec![];
 
@@ -71,9 +69,6 @@ impl State {
 
         // Unique identifier of the current user session.
         let session_id = utils::get_session_id();
-
-        // Generate unique stream identifier.
-        let stream_id = Uuid::new_v4().to_string();
 
         // Sequence number for chunk submissions starting at 0.
         let sequence_number = 0;
@@ -299,10 +294,10 @@ enum EventType {
 // Public functions
 //==============================================================================
 
-pub fn run(config: config::Config) -> () {
+pub fn run(config: config::Config, stream_id: String) -> () {
     let idle_timeout = config.idle_timeout.unwrap();
     let metadata_query_interval = config.metadata_query_interval.unwrap();
-    let mut state = State::new(config);
+    let mut state = State::new(config, stream_id);
 
     // Collect platform and device specific metadata.
     state.handle_metadata_changed_event();

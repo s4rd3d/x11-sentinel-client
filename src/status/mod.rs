@@ -22,7 +22,7 @@ pub struct Status {
 // Public functions
 //==============================================================================
 
-pub fn run(config: config::Config) -> () {
+pub fn run(config: config::Config, stream_id: String) -> () {
     let status_base_url = config.status_base_url.unwrap();
     let status_interval = config.status_interval.unwrap();
     let lock_utility = config.lock_utility.unwrap();
@@ -30,7 +30,9 @@ pub fn run(config: config::Config) -> () {
     let lock_threshold = config.lock_threshold.unwrap();
     let user_id = config.user_id.unwrap();
 
-    let status_url = format!("{}/{}", status_base_url, user_id);
+    let status_url = format!("{}/{}/{}", status_base_url, user_id, stream_id);
+
+    println!("{}", status_url);
 
     loop {
         // Get status from the remote server.
