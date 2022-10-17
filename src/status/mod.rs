@@ -32,8 +32,6 @@ pub fn run(config: config::Config, stream_id: String) -> () {
 
     let status_url = format!("{}/{}/{}", status_base_url, user_id, stream_id);
 
-    println!("{}", status_url);
-
     loop {
         // Get status from the remote server.
         let status = match get_status(&status_url) {
